@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import csv
@@ -26,26 +28,31 @@ root_log.addHandler(handler)
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", '-c', help="Path to YAML config file (defaults to ./config.yml)", type=str)
+parser.add_argument(
+    "--config",
+    "-c",
+    help="Path to YAML config file (defaults to ./config.yml)",
+    type=str,
+)
 args = parser.parse_args()
 
 if not args.config:
-    config_file = './config.yml'
+    config_file = "./config.yml"
 else:
     config_file = args.config
 
 with open(config_file, "r") as fh:
     config = yaml.safe_load(fh)
-log.debug(f'Opened config file {config_file}')
+log.debug(f"Opened config file {config_file}")
 
-log_level = getattr(logging, config['log_level'].upper(), None)
+log_level = getattr(logging, config["log_level"].upper(), None)
 if not isinstance(log_level, int):
-    raise ValueError(f'Invalid log level: {log_level}')
+    raise ValueError(f"Invalid log level: {log_level}")
 else:
     log.setLevel(log_level)
     log.debug(f'Set log level: {config["log_level"]}')
 
-if not config['validate_certs']:
+if not config["validate_certs"]:
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
     log.debug(f'Ignoring cert warnings for {config["npm_server"]}')
 
@@ -57,7 +64,7 @@ npm_client = orionsdk.SwisClient(
 )
 log.debug(f'Connected to {config["npm_server"]} as {config["npm_username"]}')
 npm_results = npm_client.query(config["npm_query"])["results"]
-log.info(f"Retrieved {len(npm_results)} NPM results")
+log.debug(f"Retrieved {len(npm_results)} NPM results")
 
 net_device_dict = {
     "device_type": "cisco_ios",
@@ -86,20 +93,26 @@ def i_care(hostname=None, nbr=None):
     if hostname:
         for expr in config["ignore_hosts"]:
             if re.search(expr, hostname):
-                log.debug(f"Host {hostname} matches expression {expr} in ignore_hosts, ignoring")
+                log.debug(
+                    f"Host {hostname} matches expression {expr} in ignore_hosts, ignoring"
+                )
                 return False
         return True
 
     if nbr:
         for expr in config["ignore_neighbors"]:
             if re.search(expr, nbr["destination_host"]):
-                log.debug(f"Neighbor {nbr['destination_host']} matches expression {expr} in ignore_neighbors, ignoring")
+                log.debug(
+                    f"Neighbor {nbr['destination_host']} matches expression {expr} in ignore_neighbors, ignoring"
+                )
                 return False
 
         if "Router" in nbr["capabilities"] or "Switch" in nbr["capabilities"]:
             return True
         else:
-            log.debug(f'Neighbor {nbr["destination_host"]} is neither router nor switch, ignoring')
+            log.debug(
+                f'Neighbor {nbr["destination_host"]} is neither router nor switch, ignoring'
+            )
             return False
 
 
@@ -131,9 +144,9 @@ def get_cdp_neighbors(device):
 
         else:
             if len(output) == 1:
-                plural = ''
+                plural = ""
             else:
-                plural = 's'
+                plural = "s"
             msg = f"Found {len(output)} CDP neighbor{plural}"
             log.info(log_msg.format(host, msg))
             result[host]["success"] = True
@@ -148,13 +161,8 @@ def get_cdp_neighbors(device):
         return result
 
 
-def format_neighbor(hostname):
-    return hostname.split(".")[0]
-
-
-def main():
-
-    # Build netmiko device connection dicts for all NPM hosts we care about
+def get_all_cdp_neighbors(npm_results):
+    """ Get CDP neighbors for all NPM hosts """
     net_devices = []
     for host in npm_results:
         if i_care(hostname=host["hostname"]):
@@ -162,13 +170,15 @@ def main():
             my_device_dict["host"] = host["hostname"]
             net_devices.append(my_device_dict)
 
-    cdp_results = {}
-    log.debug(
+    log.info(
         f'Gathering CDP neighbors from {len(net_devices)} devices with {config["max_threads"]} threads'
     )
     with ThreadPoolExecutor(max_workers=config["max_threads"]) as executor:
-        cdp_results = executor.map(get_cdp_neighbors, net_devices[:20])
+        return executor.map(get_cdp_neighbors, net_devices)
 
+
+def find_orphans(cdp_results):
+    """ Find orphans in CDP results """
     results = []
 
     for cdp_result in cdp_results:
@@ -181,7 +191,7 @@ def main():
                         nbr_ip = nbr["management_ip"]
                         nbr_platform = nbr["platform"]
                         if in_npm_results(nbr):
-                            log.debug(f'Neighbor {nbr_hostname} is known to NPM')
+                            log.debug(f"Neighbor {nbr_hostname} is known to NPM")
                         else:
                             log.info(
                                 f"Found orphan: {nbr_hostname} ({nbr_ip}) on {hostname} port {nbr_port}"
@@ -195,7 +205,11 @@ def main():
                                     "orphan_platform": nbr_platform,
                                 }
                             )
+    return results
 
+
+def save_results(orphans):
+    """ Save orphan results to CSV """
     with open(config["output_path"], "w", newline="") as csvfile:
         fieldnames = [
             "foster_hostname",
@@ -206,8 +220,20 @@ def main():
         ]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
-        for result in results:
-            writer.writerow(result)
+        for orphan in orphans:
+            writer.writerow(orphan)
+
+
+def format_neighbor(hostname):
+    return hostname.split(".")[0]
+
+
+def main():
+
+    cdp_results = get_all_cdp_neighbors(npm_results)
+    orphans = find_orphans(cdp_results)
+    if config["output_path"]:
+        save_results(orphans)
 
 
 if __name__ == "__main__":
