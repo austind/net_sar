@@ -144,10 +144,10 @@ def get_cdp_neighbors(device):
 
         else:
             if len(output) == 1:
-                plural = ""
+                s = ""
             else:
-                plural = "s"
-            msg = f"Found {len(output)} CDP neighbor{plural}"
+                s = "s"
+            msg = f"Found {len(output)} CDP neighbor{s}"
             log.info(log_msg.format(host, msg))
             result[host]["success"] = True
             result[host]["msg"] = msg
