@@ -20,7 +20,7 @@ import yaml
 logging.getLogger("paramiko.transport").disabled = True
 logging.getLogger("paramiko").setLevel(logging.WARNING)
 root_log = logging.getLogger()
-log = logging.getLogger("sar")
+log = logging.getLogger("net_sar")
 handler = logging.StreamHandler()
 formatter = logging.Formatter("%(name)s %(levelname)s: %(message)s")
 handler.setFormatter(formatter)
@@ -130,7 +130,7 @@ def get_cdp_neighbors(device):
             log.debug(received_msg.format(datetime.now().time(), host))
 
         # cdp disabled
-        if "disabled" in output:
+        if "not enabled" in output:
             msg = "CDP is disabled"
             log.warning(log_msg.format(host, msg))
             result[host]["msg"] = msg
