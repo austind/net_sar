@@ -20,7 +20,7 @@ import yaml
 logging.getLogger("paramiko.transport").disabled = True
 logging.getLogger("paramiko").setLevel(logging.WARNING)
 root_log = logging.getLogger()
-log = logging.getLogger("find_orphans")
+log = logging.getLogger("sar")
 handler = logging.StreamHandler()
 formatter = logging.Formatter("%(name)s %(levelname)s: %(message)s")
 handler.setFormatter(formatter)
@@ -177,8 +177,8 @@ def get_all_cdp_neighbors(npm_results):
         return executor.map(get_cdp_neighbors, net_devices)
 
 
-def find_orphans(cdp_results):
-    """ Find orphans in CDP results """
+def find_lost_neighbors(cdp_results):
+    """ Find lost_neighbors in CDP results """
     results = []
 
     for cdp_result in cdp_results:
@@ -191,37 +191,37 @@ def find_orphans(cdp_results):
                         nbr_ip = nbr["management_ip"]
                         nbr_platform = nbr["platform"]
                         if in_npm_results(nbr):
-                            log.debug(f"Neighbor {nbr_hostname} is known to NPM")
+                            log.debug(f"Neighbor {nbr_hostname} is known")
                         else:
                             log.info(
-                                f"Found orphan: {nbr_hostname} ({nbr_ip}) on {hostname} port {nbr_port}"
+                                f"Found lost neighbor: {nbr_hostname} ({nbr_ip}) on {hostname} port {nbr_port}"
                             )
                             results.append(
                                 {
-                                    "foster_hostname": hostname,
-                                    "foster_port": nbr_port,
-                                    "orphan_hostname": nbr_hostname,
-                                    "orphan_ipaddress": nbr_ip,
-                                    "orphan_platform": nbr_platform,
+                                    "parent_hostname": hostname,
+                                    "parent_port": nbr_port,
+                                    "found_hostname": nbr_hostname,
+                                    "found_ipaddress": nbr_ip,
+                                    "found_platform": nbr_platform,
                                 }
                             )
     return results
 
 
-def save_results(orphans):
-    """ Save orphan results to CSV """
+def save_results(lost_neighbors):
+    """ Save results to CSV """
     with open(config["output_path"], "w", newline="") as csvfile:
         fieldnames = [
-            "foster_hostname",
-            "foster_port",
-            "orphan_hostname",
-            "orphan_ipaddress",
-            "orphan_platform",
+            "parent_hostname",
+            "parent_port",
+            "found_hostname",
+            "found_ipaddress",
+            "found_platform",
         ]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
-        for orphan in orphans:
-            writer.writerow(orphan)
+        for nbr in lost_neighbors:
+            writer.writerow(nbr)
 
 
 def format_neighbor(hostname):
@@ -231,9 +231,9 @@ def format_neighbor(hostname):
 def main():
 
     cdp_results = get_all_cdp_neighbors(npm_results)
-    orphans = find_orphans(cdp_results)
+    lost_neighbors = find_lost_neighbors(cdp_results)
     if config["output_path"]:
-        save_results(orphans)
+        save_results(lost_neighbors)
 
 
 if __name__ == "__main__":
