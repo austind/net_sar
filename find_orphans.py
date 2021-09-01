@@ -76,6 +76,8 @@ def get_cdp_neighbors(device):
     received_msg = "<=== {} Received: {}"
     host = copy.copy(device["host"])
     logging.debug(start_msg.format(datetime.now().time(), host))
+    result = {host: {"success": False, "msg": None, "neighbors": None}}
+    log_msg = "{}: {}"
     try:
         with netmiko.ConnectHandler(**device) as conn:
             cmd = "show cdp neighbors detail"
@@ -84,19 +86,34 @@ def get_cdp_neighbors(device):
 
         # cdp disabled
         if "disabled" in output:
-            logging.warning(f"{host}: CDP is disabled")
-            return None
+            msg = "CDP is disabled"
+            logging.warning(log_msg.format(host, msg))
+            result[host]["msg"] = msg
+            return result
 
         elif type(output) is str:
-            logging.warning(f"{host}: CDP output did not parse properly")
-            return None
+            msg = "Error parsing CDP output"
+            logging.warning(log_msg.format(host, msg))
+            result[host]["msg"] = msg
+            return result
 
         else:
-            return {host: output}
+            if len(output) == 1:
+                plural = ''
+            else:
+                plural = 's'
+            msg = f"Found {len(output)} CDP neighbor{plural}"
+            logging.info(log_msg.format(host, msg))
+            result[host]["success"] = True
+            result[host]["msg"] = msg
+            result[host]["neighbors"] = output
+            return result
 
     except Exception as err:
-        logging.warning(f"{host}: {err}")
-        return {host: None}
+        msg = err
+        logging.warning(log_msg.format(host, msg))
+        result[host]["msg"] = msg
+        return result
 
 
 def format_neighbor(hostname):
@@ -110,24 +127,27 @@ def main():
     for host in npm_results:
         for expr in config["ignore_hosts"]:
             if re.search(expr, host["hostname"]):
+                logging.info(
+                    f'Hostname {host["hostname"]} matches expression "{expr}" in ignore_hosts, ignoring'
+                )
                 continue
         my_device_dict = copy.copy(net_device_dict)
         my_device_dict["host"] = host["hostname"]
         net_devices.append(my_device_dict)
 
     cdp_results = {}
+    logging.info(
+        f'Gathering CDP neighbors from {len(net_devices)} devices with {config["max_threads"]} threads'
+    )
     with ThreadPoolExecutor(max_workers=config["max_threads"]) as executor:
-        cdp_results = executor.map(get_cdp_neighbors, net_devices)
-
-    # remove null results from failed devices
-    cdp_results = [x for x in cdp_results if x]
+        cdp_results = executor.map(get_cdp_neighbors, net_devices[:20])
 
     results = []
 
     for cdp_result in cdp_results:
-        for hostname, neighbors in cdp_result.items():
-            if neighbors:
-                for nbr in neighbors:
+        for hostname, status in cdp_result.items():
+            if status["success"]:
+                for nbr in status["neighbors"]:
                     if i_care(hostname, nbr):
                         nbr_hostname = format_neighbor(nbr["destination_host"])
                         nbr_port = nbr["local_port"]
