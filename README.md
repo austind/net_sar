@@ -1,4 +1,4 @@
-# Search and Rescue
+# Network Search and Rescue
 Find lost CDP neighbors
 
 1. Reads list of known hosts from Solarwinds Orion
@@ -17,4 +17,4 @@ Find lost CDP neighbors
 
 1. Install NTC templates: `git clone https://github.com/networktocode/ntc-templates.git ~/ntc-templates`
 1. Rename `config.yml.example` to `config.yml` and match to your environment
-1. Run `python3 sar.py`
+1. Run `python3 net_sar.py`
