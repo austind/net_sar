@@ -19,6 +19,9 @@ net_secret: s3cret
 # (optional) SSH config file to pass to netmiko
 ssh_config_file: ~/.ssh/config
 
+# Log level (debug, info, warning, error, critical)
+log_level: info
+
 # Path to save output CSV
 output_path: ./orphans.csv
 
@@ -38,3 +41,6 @@ max_threads: 100
 # Path to NTC textfsm templates
 # git clone https://github.com/networktocode/ntc-templates.git
 ntc_templates_path: ~/ntc-templates/ntc_templates/templates
+
+# Whether or not to validate SSL cert on npm_server
+validate_certs: False

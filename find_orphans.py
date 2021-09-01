@@ -13,17 +13,25 @@ import logging
 from datetime import datetime
 import yaml
 
-logging.getLogger("paramiko.transport").disabled = True
-logging.getLogger("paramiko").setLevel(logging.WARNING)
-logging.basicConfig(
-    format="%(threadName)s %(name)s %(levelname)s: %(message)s", level=logging.INFO
-)
-
-
-requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-
 with open("./config.yml", "r") as fh:
     config = yaml.safe_load(fh)
+
+log_level = getattr(logging, config['log_level'].upper(), None)
+if not isinstance(log_level, int):
+    raise ValueError(f'Invalid log level: {log_level}')
+
+logging.getLogger("paramiko.transport").disabled = True
+logging.getLogger("paramiko").setLevel(logging.WARNING)
+root_log = logging.getLogger()
+log = logging.getLogger("find_orphans")
+log.setLevel(log_level)
+handler = logging.StreamHandler()
+formatter = logging.Formatter("%(name)s %(levelname)s: %(message)s")
+handler.setFormatter(formatter)
+root_log.addHandler(handler)
+
+if not config['validate_certs']:
+    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 # netmiko uses this environment variable for textfsm templates
 os.environ["NET_TEXTFSM"] = config["ntc_templates_path"]
@@ -75,25 +83,25 @@ def get_cdp_neighbors(device):
     start_msg = "===> {} Connection: {}"
     received_msg = "<=== {} Received: {}"
     host = copy.copy(device["host"])
-    logging.debug(start_msg.format(datetime.now().time(), host))
+    log.debug(start_msg.format(datetime.now().time(), host))
     result = {host: {"success": False, "msg": None, "neighbors": None}}
     log_msg = "{}: {}"
     try:
         with netmiko.ConnectHandler(**device) as conn:
             cmd = "show cdp neighbors detail"
             output = conn.send_command(cmd, use_textfsm=True)
-            logging.debug(received_msg.format(datetime.now().time(), host))
+            log.debug(received_msg.format(datetime.now().time(), host))
 
         # cdp disabled
         if "disabled" in output:
             msg = "CDP is disabled"
-            logging.warning(log_msg.format(host, msg))
+            log.warning(log_msg.format(host, msg))
             result[host]["msg"] = msg
             return result
 
         elif type(output) is str:
             msg = "Error parsing CDP output"
-            logging.warning(log_msg.format(host, msg))
+            log.warning(log_msg.format(host, msg))
             result[host]["msg"] = msg
             return result
 
@@ -103,7 +111,7 @@ def get_cdp_neighbors(device):
             else:
                 plural = 's'
             msg = f"Found {len(output)} CDP neighbor{plural}"
-            logging.info(log_msg.format(host, msg))
+            log.info(log_msg.format(host, msg))
             result[host]["success"] = True
             result[host]["msg"] = msg
             result[host]["neighbors"] = output
@@ -111,7 +119,7 @@ def get_cdp_neighbors(device):
 
     except Exception as err:
         msg = err
-        logging.warning(log_msg.format(host, msg))
+        log.warning(log_msg.format(host, msg))
         result[host]["msg"] = msg
         return result
 
@@ -125,18 +133,20 @@ def main():
     # Build netmiko device connection dicts for all NPM hosts we care about
     net_devices = []
     for host in npm_results:
+        ignore = False
         for expr in config["ignore_hosts"]:
             if re.search(expr, host["hostname"]):
-                logging.info(
+                log.debug(
                     f'Hostname {host["hostname"]} matches expression "{expr}" in ignore_hosts, ignoring'
                 )
-                continue
-        my_device_dict = copy.copy(net_device_dict)
-        my_device_dict["host"] = host["hostname"]
-        net_devices.append(my_device_dict)
+                ignore = True
+        if not ignore:
+            my_device_dict = copy.copy(net_device_dict)
+            my_device_dict["host"] = host["hostname"]
+            net_devices.append(my_device_dict)
 
     cdp_results = {}
-    logging.info(
+    log.info(
         f'Gathering CDP neighbors from {len(net_devices)} devices with {config["max_threads"]} threads'
     )
     with ThreadPoolExecutor(max_workers=config["max_threads"]) as executor:
@@ -154,7 +164,7 @@ def main():
                         nbr_ip = nbr["management_ip"]
                         nbr_platform = nbr["platform"]
                         if not in_npm_results(nbr):
-                            logging.info(
+                            log.info(
                                 f"Found orphan: {nbr_hostname} ({nbr_ip}) on {hostname} port {nbr_port}"
                             )
                             results.append(
