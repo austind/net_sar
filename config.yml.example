@@ -1,0 +1,40 @@
+---
+
+# FQDN of Solarwinds Orion server
+npm_server: orion.example.com
+
+# SWQL query to retreive hosts
+# Mandatory fields: hostname (str), ipaddress (str). Other fields are optional.
+npm_query:  SELECT N.NodeID AS id, N.Caption AS hostname, N.IPAddress AS ipaddress, FROM Orion.Nodes N WHERE N.Vendor = 'Cisco'
+
+# Creds to log in to Solarwinds Orion
+npm_username: admin
+npm_password: p@ssword
+
+# Creds to log in to network devices
+net_username: admin
+net_password: p@ssword
+net_secret: s3cret
+
+# (optional) SSH config file to pass to netmiko
+ssh_config_file: ~/.ssh/config
+
+# Path to save output CSV
+output_path: ./orphans.csv
+
+# List of regex patterns for hosts (returned from npm_query) to ignore
+ignore_hosts:
+    - sw01
+    - rtr04
+    - us-west.*
+
+# List of regex patterns for neighbors to ignore
+ignore_neighbors:
+    - PH.*
+
+# Maximum concurrent SSH sessions
+max_threads: 100
+
+# Path to NTC textfsm templates
+# git clone https://github.com/networktocode/ntc-templates.git
+ntc_templates_path: ~/ntc-templates/ntc_templates/templates
