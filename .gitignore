@@ -1,7 +1,10 @@
 *.pyc
 *.swp
+config.yml
+found.csv
+scratch.py
+test.py
 
-examples/SECRET_DEVICE_CREDS.py
 ./build
 ./build/*
 build/
