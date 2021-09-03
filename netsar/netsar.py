@@ -71,7 +71,7 @@ class Search(object):
         in_inventory = False
         for item in self.inventory:
             if item["hostname"].lower() == self._format_neighbor(
-                nbr["destination_host"].lower()
+                nbr[self.config.nbr_hostname_key].lower()
             ):
                 in_inventory = True
         return in_inventory
@@ -88,20 +88,39 @@ class Search(object):
             return True
 
         if nbr:
+            nbr_hostname = self._format_neighbor(nbr[self.config.nbr_hostname_key])
+            nbr_capab = nbr[self.config.nbr_capabilities_key]
             for expr in self.config.ignore_neighbors:
-                if re.search(expr, nbr["destination_host"]):
+                if re.search(expr, nbr_hostname):
                     self.log.debug(
-                        f"Neighbor {nbr['destination_host']} matches expression {expr} in ignore_neighbors, ignoring"
+                        f"Neighbor {nbr_hostname} matches expression {expr} in config.ignore_neighbors, ignoring"
                     )
                     return False
 
-            if "Router" in nbr["capabilities"] or "Switch" in nbr["capabilities"]:
-                return True
+            i_care = False
+            include_expr = "|".join(self.config.include_capabilities)
+            include = re.search(include_expr, nbr_capab)
+            ignore_expr = "|".join(self.config.ignore_capabilities)
+            ignore = re.search(ignore_expr, nbr_capab)
+            
+            if include and not ignore:
+                i_care = True
             else:
-                self.log.debug(
-                    f'Neighbor {nbr["destination_host"]} is neither router nor switch, ignoring'
-                )
-                return False
+                if not include:
+                    self.log.debug(
+                        f"Neighbor {nbr_hostname}'s "
+                        f"capabilities ('{nbr_capab}') "
+                        f"do not match any expression in config.include_capabilities, "
+                        f"ignoring"
+                    )
+                if ignore:
+                    self.log.debug(
+                        f"Neighbor {nbr_hostname}'s "
+                        f"capabilities ('{nbr_capab}') "
+                        f"match expression {ignore.group()} in config.ignore_capabilities, "
+                        f"ignoring"
+                    )
+            return i_care
 
     def _get_textfsm_template(self, cmd=None):
         """ Gets textfsm filename based on cmd and device_type """
@@ -139,7 +158,7 @@ class Search(object):
         textfsm_template = self._get_textfsm_template()
         if not os.path.exists(os.path.expanduser(textfsm_template)):
             raise ValueError(f"Could not find textfsm template: \n{textfsm_template}")
-        self.log.debug(f"Using textfsm template: \n{textfsm_template}")
+        self.log.debug(f"Using textfsm template: {textfsm_template}")
         start_msg = "===> {} Connection: {}"
         received_msg = "<=== {} Received: {}"
         host = copy.copy(device["host"])
@@ -210,10 +229,9 @@ class Search(object):
                 if status["success"]:
                     for nbr in status["neighbors"]:
                         if self._i_care(nbr=nbr):
-                            nbr_hostname = self._format_neighbor(nbr["destination_host"])
-                            nbr_port = nbr["local_port"]
-                            nbr_ip = nbr["management_ip"]
-                            nbr_platform = nbr["platform"]
+                            nbr_hostname = self._format_neighbor(nbr[self.config.nbr_hostname_key])
+                            nbr_port = nbr[self.config.nbr_local_port_key]
+                            nbr_ip = nbr[self.config.nbr_ip_key]
                             if self._in_inventory(nbr):
                                 self.log.debug(
                                     f"Neighbor {nbr_hostname} is in inventory"
@@ -222,15 +240,11 @@ class Search(object):
                                 self.log.info(
                                     f"Found lost neighbor: {nbr_hostname} ({nbr_ip}) on {hostname} port {nbr_port}"
                                 )
-                                results.append(
-                                    {
-                                        "parent_hostname": hostname,
-                                        "parent_port": nbr_port,
-                                        "found_hostname": nbr_hostname,
-                                        "found_ipaddress": nbr_ip,
-                                        "found_platform": nbr_platform,
-                                    }
-                                )
+                                result = {self.config.result_parent_key: hostname}
+                                for key in self.config.ignore_result_keys:
+                                    del nbr[key]
+                                result.update(nbr)
+                                results.append(result)
         self.lost_neighbors = results
 
     def save_results(self, path=None, lost_neighbors=None):

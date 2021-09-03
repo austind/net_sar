@@ -1,15 +1,39 @@
 ---
 
-# Device type (netmiko driver to use)
+# Device type
+# https://github.com/ktbyers/netmiko/blob/develop/PLATFORMS.md#supported-ssh-device_type-values
 device_type: cisco_ios
 
-# Protocol to use
+# Neighbor protocol (cdp, lldp)
 protocol: cdp
 
-# Command to retrieve neighbors with as much detail as you want.
-# Must have a corresponding textfsm template in ntc-templates:
+# Full, unabbreviated command to retrieve neighbors.
+# Must have a corresponding textfsm template in ntc-templates.
 # https://github.com/networktocode/ntc-templates/tree/master/ntc_templates/templates
 cmd: show cdp neighbors detail
+
+# Key of neighbor's hostname in neighbor result dict
+# - Cisco CDP: destination_host
+# - Cisco LLDP: neighbor
+nbr_hostname_key: destination_host
+
+# Key of neighbor's management IP address in neighbor result dict
+# - Cisco CDP: management_ip
+# - Cisco LLDP: management_ip
+nbr_ip_key: management_ip
+
+# Key of local port in neighbor result dict
+# - Cisco CDP: local_port
+# - Cisco LLDP: local_interface
+nbr_local_port_key: local_port
+
+# Key of neighbor's advertised capabilities in neighbor result dict
+# Cisco CDP & LLDP: capabilities
+nbr_capabilities_key: capabilities
+
+# Name of key to use for parent hosts in results
+# Can be set to any value
+result_parent_key: parent_host
 
 # FQDN of Solarwinds Orion server
 npm_server: orion.example.com
@@ -27,7 +51,7 @@ net_username: admin
 net_password: p@ssword
 net_secret: s3cret
 
-# (optional) SSH config file to pass to netmiko
+# SSH config file to pass to netmiko (optional) 
 ssh_config_file: ~/.ssh/config
 
 # Log level (debug, info, warning, error, critical)
@@ -36,7 +60,29 @@ log_level: info
 # Path to save output CSV
 output_path: ./found.csv
 
-# List of regex patterns for hosts (returned from npm_query) to ignore
+# List of regex patterns for neighbor capabilities to include or ignore
+#
+# Cisco CDP capabilities:
+#    R - Router, T - Trans Bridge, B - Source Route Bridge
+#    S - Switch, H - Host, I - IGMP, r - Repeater, P - Phone,
+#    D - Remote, C - CVTA, M - Two-port Mac Relay
+#
+# Cisco LLDP capabilities:
+#   (R) Router, (B) Bridge, (T) Telephone, (C) DOCSIS Cable Device
+#   (W) WLAN Access Point, (P) Repeater, (S) Station, (O) Other
+#
+# NOTE: When using `show (cdp|lldp) neighbors detail`, list the FULL NAME
+#       of the capability you want to match (Router, Switch, etc).
+#       When using `show (cdp|lldp) neighbors`, use the ABBREVIATION (R, S, etc).
+#
+include_capabilities:
+    - Router
+    - Switch
+ignore_capabilities:
+    - Host
+    - Phone
+
+# List of regex patterns for hosts ignore
 ignore_hosts:
     - sw01
     - rtr04
@@ -45,6 +91,10 @@ ignore_hosts:
 # List of regex patterns for neighbors to ignore
 ignore_neighbors:
     - PH.*
+
+# List of textfsm result keys from cmd to exclude from results
+ignore_result_keys:
+    - software_version
 
 # Maximum concurrent SSH sessions
 max_threads: 100
