@@ -1,0 +1,30 @@
+---
+
+cisco_ios:
+    cdp:
+        cmd: show cdp neighbors detail
+        keys:
+            nbr_hostname: destination_host
+            nbr_ip: management_ip
+            nbr_local_port: local_port
+            nbr_capabilities: capabilities
+        capabilities:
+            router: Router
+            bridge: Switch
+            station: Host
+            phone: Phone
+            wlan_ap: None
+    lldp:
+        cmd: show lldp neighbors detail
+        keys:
+            nbr_hostname: neighbor
+            nbr_ip: management_ip
+            nbr_local_port: local_interface
+            nbr_capabilities: capabilities
+        capabilities:
+            router: R
+            bridge: B
+            station: S
+            phone: T
+            wlan_ap: W
+

@@ -6,6 +6,7 @@ import copy
 import netmiko
 import getpass
 import requests
+from pathlib import Path
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from pprint import pprint as pp
 import logging
@@ -45,6 +46,15 @@ class Search(object):
         else:
             self.log.setLevel(log_level)
             self.log.debug(f"Set log level: {self.config.log_level}")
+        
+        with open(Path(__file__).parent.joinpath('cmd_map.yml'),'r') as fh:
+            self.cmd_map = yaml.safe_load(fh)
+        
+        self.cmd = self.cmd_map[self.config.device_type][self.config.protocol]['cmd']
+        self.log.debug(f'Using command: {self.cmd}')
+        self.keys = self.cmd_map[self.config.device_type][self.config.protocol]['keys']
+        self.log.debug(f'Using key map: {pp(self.keys)}')
+        self.capabilities = self.cmd_map[self.config.device_type][self.config.protocol]['capabilities']
 
         self.net_device_dict = {
             "device_type": self.config.device_type,
@@ -71,7 +81,7 @@ class Search(object):
         in_inventory = False
         for item in self.inventory:
             if item["hostname"].lower() == self._format_neighbor(
-                nbr[self.config.nbr_hostname_key].lower()
+                nbr[self.keys['nbr_hostname']].lower()
             ):
                 in_inventory = True
         return in_inventory
@@ -88,8 +98,8 @@ class Search(object):
             return True
 
         if nbr:
-            nbr_hostname = self._format_neighbor(nbr[self.config.nbr_hostname_key])
-            nbr_capab = nbr[self.config.nbr_capabilities_key]
+            nbr_hostname = self._format_neighbor(nbr[self.keys['nbr_hostname']])
+            nbr_capab = nbr[self.keys['nbr_capabilities']]
             for expr in self.config.ignore_neighbors:
                 if re.search(expr, nbr_hostname):
                     self.log.debug(
@@ -98,9 +108,18 @@ class Search(object):
                     return False
 
             i_care = False
-            include_expr = "|".join(self.config.include_capabilities)
+            include_expr_list = []
+            for capability in self.config.include_capabilities:
+                include_expr_list.append(self.capabilities[capability])
+            include_expr = "|".join(include_expr_list)
+            #self.log.debug(f"Neighbor include capabilities regex: {include_expr}")
             include = re.search(include_expr, nbr_capab)
-            ignore_expr = "|".join(self.config.ignore_capabilities)
+            
+            ignore_expr_list = []
+            for capability in self.config.ignore_capabilities:
+                ignore_expr_list.append(self.capabilities[capability])
+            ignore_expr = "|".join(ignore_expr_list)
+            #self.log.debug(f"Neighbor exclude capabilities regex: {ignore_expr}")
             ignore = re.search(ignore_expr, nbr_capab)
             
             if include and not ignore:
@@ -108,14 +127,14 @@ class Search(object):
             else:
                 if not include:
                     self.log.debug(
-                        f"Neighbor {nbr_hostname}'s "
+                        f"Neighbor '{nbr_hostname}': "
                         f"capabilities ('{nbr_capab}') "
                         f"do not match any expression in config.include_capabilities, "
                         f"ignoring"
                     )
                 if ignore:
                     self.log.debug(
-                        f"Neighbor {nbr_hostname}'s "
+                        f"Neighbor '{nbr_hostname}': "
                         f"capabilities ('{nbr_capab}') "
                         f"match expression {ignore.group()} in config.ignore_capabilities, "
                         f"ignoring"
@@ -125,10 +144,10 @@ class Search(object):
     def _get_textfsm_template(self, cmd=None):
         """ Gets textfsm filename based on cmd and device_type """
         if cmd is None:
-            cmd = self.config.cmd
+            cmd = self.cmd
         return f"{self.config.ntc_templates_path}/" \
                 f"{self.config.device_type}_" \
-                f"{self.config.cmd.replace(' ', '_')}.textfsm"
+                f"{self.cmd.replace(' ', '_')}.textfsm"
 
     def get_inventory(self):
 
@@ -153,7 +172,7 @@ class Search(object):
         if protocol is None:
             protocol = self.config.protocol
         if cmd is None:
-            cmd = self.config.cmd
+            cmd = self.cmd
         
         textfsm_template = self._get_textfsm_template()
         if not os.path.exists(os.path.expanduser(textfsm_template)):
@@ -229,9 +248,9 @@ class Search(object):
                 if status["success"]:
                     for nbr in status["neighbors"]:
                         if self._i_care(nbr=nbr):
-                            nbr_hostname = self._format_neighbor(nbr[self.config.nbr_hostname_key])
-                            nbr_port = nbr[self.config.nbr_local_port_key]
-                            nbr_ip = nbr[self.config.nbr_ip_key]
+                            nbr_hostname = self._format_neighbor(nbr[self.keys['nbr_hostname']])
+                            nbr_port = nbr[self.keys['nbr_local_port']]
+                            nbr_ip = nbr[self.keys['nbr_ip']]
                             if self._in_inventory(nbr):
                                 self.log.debug(
                                     f"Neighbor {nbr_hostname} is in inventory"
@@ -242,7 +261,11 @@ class Search(object):
                                 )
                                 result = {self.config.result_parent_key: hostname}
                                 for key in self.config.ignore_result_keys:
-                                    del nbr[key]
+                                    if key in nbr:
+                                        del nbr[key]
+                                        self.log.debug(f"config.ignore_result_key '{key}' removed from neighbor result")
+                                    else:
+                                        self.log.debug(f"config.ignore_result_key '{key}' does not exist in neighbor result, skipping")
                                 result.update(nbr)
                                 results.append(result)
         self.lost_neighbors = results
