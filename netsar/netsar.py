@@ -8,6 +8,7 @@ import getpass
 import requests
 from pathlib import Path
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from tqdm.contrib.concurrent import thread_map
 from pprint import pprint as pp
 import logging
 from datetime import datetime
@@ -208,7 +209,7 @@ class Search(object):
                 else:
                     s = "s"
                 msg = f"Found {len(output)} {protocol.upper()} neighbor{s}"
-                self.log.info(log_msg.format(host, msg))
+                self.log.debug(log_msg.format(host, msg))
                 result[host]["success"] = True
                 result[host]["msg"] = msg
                 result[host]["neighbors"] = output
@@ -232,10 +233,13 @@ class Search(object):
                 net_devices.append(my_device_dict)
 
         self.log.info(
-            f"Getting all {self.config.protocol.upper()} neighbors from {len(net_devices)} devices with {self.config.max_threads} threads"
+            f"Getting all {self.config.protocol.upper()} neighbors from {len(net_devices)} devices with {self.config.max_threads} max threads"
         )
-        with ThreadPoolExecutor(max_workers=self.config.max_threads) as executor:
-            self.neighborhood = executor.map(self.get_neighbors, net_devices)
+        if self.config.log_level == 'info':
+            self.neighborhood = thread_map(self.get_neighbors, net_devices, max_workers=self.config.max_threads)
+        else:
+            with ThreadPoolExecutor(max_workers=self.config.max_threads) as executor:
+                self.neighborhood = executor.map(self.get_neighbors, net_devices)
 
     def find_lost_neighbors(self, neighborhood=None):
         """ Find lost_neighbors in CDP results """
