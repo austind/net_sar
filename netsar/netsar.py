@@ -53,7 +53,7 @@ class Search(object):
         self.cmd = self.cmd_map[self.config.device_type][self.config.protocol]['cmd']
         self.log.debug(f'Using command: {self.cmd}')
         self.keys = self.cmd_map[self.config.device_type][self.config.protocol]['keys']
-        self.log.debug(f'Using key map: {pp(self.keys)}')
+        self.log.debug(f'Using key map: {self.keys}')
         self.capabilities = self.cmd_map[self.config.device_type][self.config.protocol]['capabilities']
 
         self.net_device_dict = {
@@ -92,7 +92,7 @@ class Search(object):
             for expr in self.config.ignore_hosts:
                 if re.search(expr, hostname):
                     self.log.debug(
-                        f"Host {hostname} matches expression {expr} in ignore_hosts, ignoring"
+                        f"Host '{hostname}' matches expression {expr} in ignore_hosts, ignoring"
                     )
                     return False
             return True
@@ -103,7 +103,7 @@ class Search(object):
             for expr in self.config.ignore_neighbors:
                 if re.search(expr, nbr_hostname):
                     self.log.debug(
-                        f"Neighbor {nbr_hostname} matches expression {expr} in config.ignore_neighbors, ignoring"
+                        f"Neighbor '{nbr_hostname}' matches expression {expr} in config.ignore_neighbors, ignoring"
                     )
                     return False
 
@@ -149,7 +149,7 @@ class Search(object):
                 f"{self.config.device_type}_" \
                 f"{self.cmd.replace(' ', '_')}.textfsm"
 
-    def get_inventory(self):
+    def get_inventory(self, limit=0):
 
         import orionsdk
 
@@ -164,7 +164,7 @@ class Search(object):
             f"Connected to {self.config.npm_server} as {self.config.npm_username}"
         )
         self.inventory = npm_client.query(self.config.npm_query)["results"]
-        self.log.debug(f"Retrieved {len(self.inventory)} NPM results")
+        self.log.debug(f"Retrieved {len(self.inventory)} inventory results")
 
 
     def get_neighbors(self, device, protocol=None, cmd=None):
@@ -188,7 +188,7 @@ class Search(object):
             with netmiko.ConnectHandler(**device) as conn:
                 output = conn.send_command(cmd, use_textfsm=True)
                 self.log.debug(received_msg.format(datetime.now().time(), host))
-                self.log.debug(pp(output))
+                #self.log.debug(pp(output))
 
             if "not enabled" in output:
                 msg = f"{protocol.upper()} is disabled"
@@ -232,7 +232,7 @@ class Search(object):
                 net_devices.append(my_device_dict)
 
         self.log.info(
-            f"Getting all neighbors from {len(net_devices)} devices with {self.config.max_threads} threads"
+            f"Getting all {self.config.protocol.upper()} neighbors from {len(net_devices)} devices with {self.config.max_threads} threads"
         )
         with ThreadPoolExecutor(max_workers=self.config.max_threads) as executor:
             self.neighborhood = executor.map(self.get_neighbors, net_devices)
@@ -295,7 +295,7 @@ def main():
     search.get_inventory()
     search.get_neighborhood()
     search.find_lost_neighbors()
-    pp(search.lost_neighbors)
+    #pp(search.lost_neighbors)
 
 if __name__ == "__main__":
     main()

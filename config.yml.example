@@ -7,10 +7,6 @@ device_type: cisco_ios
 # Neighbor protocol (lldp or CDP [Cisco only])
 protocol: cdp
 
-# Name of key to use for parent hosts in results
-# Can be set to any value
-result_parent_key: parent_host
-
 # FQDN of Solarwinds Orion server
 npm_server: orion.example.com
 
@@ -30,19 +26,35 @@ net_secret: s3cret
 # SSH config file to pass to netmiko (optional) 
 ssh_config_file: ~/.ssh/config
 
-# Log level (debug, info, warning, error, critical)
+# Log level
+# Possible values: debug, info, warning, error, critical
 log_level: info
 
 # Path to save output CSV
 output_path: ./found.csv
 
-# List of capabilities to include or ignore
+# List of regex patterns for inventory hosts to ignore
+ignore_hosts:
+    - sw01
+    - rtr04
+    - us-west.*
+
+# List of regex patterns for neighbor hostnames to ignore
+ignore_neighbors:
+    - PH.*
+
+# List of neighbor's advertised capabilities to include or ignore.
+# Each list is exclusive of the other. This is important because,
+# for example, many phones advertise themselves both as a phone and
+# bridge since they have a passthrough port. If you don't want
+# phones in results, add "bridge" to include_capabilities and
+# "phone" to exclude_capabilities.
 # Possible values:
-# - router
-# - bridge (switch)
-# - station (host)
-# - phone
-# - wlan_ap
+# - router - Layer 3 device
+# - bridge - Layer 2 device (switch)
+# - station - Endpoint (host)
+# - phone - VOIP phone
+# - wlan_ap - WLAN access point
 include_capabilities:
     - router
     - bridge
@@ -50,26 +62,21 @@ ignore_capabilities:
     - station
     - phone
 
-# List of regex patterns for hosts ignore
-ignore_hosts:
-    - sw01
-    - rtr04
-    - us-west.*
-
-# List of regex patterns for neighbors to ignore
-ignore_neighbors:
-    - PH.*
-
-# List of textfsm result keys from cmd to exclude from results
+# List of textfsm result keys from to exclude from final results
 ignore_result_keys:
     - software_version
+    - system_description
 
 # Maximum concurrent SSH sessions
 max_threads: 100
 
 # Path to NTC textfsm templates
-# git clone https://github.com/networktocode/ntc-templates.git
+# git clone https://github.com/networktocode/ntc-templates.git ~/ntc-templates
 ntc_templates_path: ~/ntc-templates/ntc_templates/templates
 
 # Whether or not to validate SSL cert on npm_server
 validate_certs: False
+
+# Name of key to use for parent hostname in lost neighbor results
+# Can be set to any value
+result_parent_key: parent_host
