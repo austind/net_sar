@@ -1,5 +1,16 @@
 ---
 
+# Device type (netmiko driver to use)
+device_type: cisco_ios
+
+# Protocol to use
+protocol: cdp
+
+# Command to retrieve neighbors with as much detail as you want.
+# Must have a corresponding textfsm template in ntc-templates:
+# https://github.com/networktocode/ntc-templates/tree/master/ntc_templates/templates
+cmd: show cdp neighbors detail
+
 # FQDN of Solarwinds Orion server
 npm_server: orion.example.com
 
