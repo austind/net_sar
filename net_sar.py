@@ -41,41 +41,45 @@ if not args.config:
 else:
     config_file = args.config
 
+class Struct:
+    """ Converts dicts to objects """
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
 with open(config_file, "r") as fh:
-    config = yaml.safe_load(fh)
+    config = Struct(**yaml.safe_load(fh))
 log.debug(f"Opened config file {config_file}")
 
-log_level = getattr(logging, config["log_level"].upper(), None)
+log_level = getattr(logging, config.log_level.upper(), None)
 if not isinstance(log_level, int):
     raise ValueError(f"Invalid log level: {log_level}")
 else:
     log.setLevel(log_level)
-    log.debug(f'Set log level: {config["log_level"]}')
+    log.debug(f'Set log level: {config.log_level}')
 
-if not config["validate_certs"]:
+if not config.validate_certs:
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-    log.debug(f'Ignoring cert warnings for {config["npm_server"]}')
+    log.debug(f'Ignoring cert warnings for {config.npm_server}')
 
 # netmiko uses this environment variable for textfsm templates
-os.environ["NET_TEXTFSM"] = config["ntc_templates_path"]
+os.environ["NET_TEXTFSM"] = config.ntc_templates_path
 
 npm_client = orionsdk.SwisClient(
-    config["npm_server"], config["npm_username"], config["npm_password"]
+    config.npm_server, config.npm_username, config.npm_password
 )
-log.debug(f'Connected to {config["npm_server"]} as {config["npm_username"]}')
-npm_results = npm_client.query(config["npm_query"])["results"]
+log.debug(f'Connected to {config.npm_server} as {config.npm_username}')
+npm_results = npm_client.query(config.npm_query)["results"]
 log.debug(f"Retrieved {len(npm_results)} NPM results")
 
 net_device_dict = {
     "device_type": "cisco_ios",
-    "username": config["net_username"],
-    "password": config["net_password"],
-    "secret": config["net_secret"],
+    "username": config.net_username,
+    "password": config.net_password,
+    "secret": config.net_secret,
 }
-if config["ssh_config_file"]:
-    net_device_dict.update({"ssh_config_file": config["ssh_config_file"]})
-    log.debug(f'Using SSH config file {config["ssh_config_file"]}')
-
+if config.ssh_config_file:
+    net_device_dict.update({"ssh_config_file": config.ssh_config_file})
+    log.debug(f'Using SSH config file {config.ssh_config_file}')
 
 def in_npm_results(nbr):
     """ Whether or not a neighbor is in npm_results """
@@ -91,7 +95,7 @@ def in_npm_results(nbr):
 def i_care(hostname=None, nbr=None):
     """ Whether or not I care about a given host or neighbor """
     if hostname:
-        for expr in config["ignore_hosts"]:
+        for expr in config.ignore_hosts:
             if re.search(expr, hostname):
                 log.debug(
                     f"Host {hostname} matches expression {expr} in ignore_hosts, ignoring"
@@ -100,7 +104,7 @@ def i_care(hostname=None, nbr=None):
         return True
 
     if nbr:
-        for expr in config["ignore_neighbors"]:
+        for expr in config.ignore_neighbors:
             if re.search(expr, nbr["destination_host"]):
                 log.debug(
                     f"Neighbor {nbr['destination_host']} matches expression {expr} in ignore_neighbors, ignoring"
@@ -171,9 +175,9 @@ def get_all_cdp_neighbors(npm_results):
             net_devices.append(my_device_dict)
 
     log.info(
-        f'Gathering CDP neighbors from {len(net_devices)} devices with {config["max_threads"]} threads'
+        f'Gathering CDP neighbors from {len(net_devices)} devices with {config.max_threads} threads'
     )
-    with ThreadPoolExecutor(max_workers=config["max_threads"]) as executor:
+    with ThreadPoolExecutor(max_workers=config.max_threads) as executor:
         return executor.map(get_cdp_neighbors, net_devices)
 
 
@@ -210,7 +214,7 @@ def find_lost_neighbors(cdp_results):
 
 def save_results(lost_neighbors):
     """ Save results to CSV """
-    with open(config["output_path"], "w", newline="") as csvfile:
+    with open(config.output_path, "w", newline="") as csvfile:
         fieldnames = [
             "parent_hostname",
             "parent_port",
@@ -232,7 +236,7 @@ def main():
 
     cdp_results = get_all_cdp_neighbors(npm_results)
     lost_neighbors = find_lost_neighbors(cdp_results)
-    if config["output_path"]:
+    if config.output_path:
         save_results(lost_neighbors)
 
 
