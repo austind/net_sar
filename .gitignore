@@ -1,0 +1,33 @@
+*.pyc
+*.swp
+
+examples/SECRET_DEVICE_CREDS.py
+./build
+./build/*
+build/
+dist
+.cache
+
+# IDE Related files
+.vscode/*
+.idea/
+
+# Virtual Environment files
+.venv/
+bin/
+lib/
+pyvenv.cfg
+.devcontainer
+
+# Sphinx documentation
+docs/build/doctrees/
+
+# Tox
+.tox/*
+
+.pytest_cache/*
+
+# Mac stuff
+.DS_Store
+*/.DS_Store
+
